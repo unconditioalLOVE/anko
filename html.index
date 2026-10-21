@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Liquid Glass PiP Video Player</title>
+  <style>
+    :root {
+      --bg-gradient: linear-gradient(135deg, #f6f8fc 0%, #e9eef6 50%, #dbe4f0 100%);
+      --glass-bg: rgba(255, 255, 255, 0.45);
+      --glass-bg-subtle: rgba(255, 255, 255, 0.3);
+      --glass-border: rgba(255, 255, 255, 0.7);
+      --glass-shadow: 0 20px 40px rgba(0, 10, 30, 0.08), 0 1px 3px rgba(255, 255, 255, 0.9) inset;
+      --glass-shadow-active: 0 25px 50px rgba(0, 10, 30, 0.12), 0 1px 3px rgba(255, 255, 255, 1) inset;
+      
+      --text-main: #1d1d1f;
+      --text-muted: #86868b;
+      --accent-color: #0071e3;
+      --accent-light: rgba(0, 113, 227, 0.12);
+      
+      --radius-xl: 32px;
+      --radius-lg: 20px;
+      --radius-md: 12px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif;
+      background: var(--bg-gradient);
+      color: var(--text-main);
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    /* 背景のダイナミックな光・液体グラデーション球（リキッド感を強調） */
+    .bg-blob {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(80px);
+      z-index: 0;
+      pointer-events: none;
+      animation: float 20s infinite alternate ease-in-out;
+    }
+
+    .blob-1 {
+      width: 500px;
+      height: 500px;
+      background: rgba(200, 225, 255, 0.6);
+      top: -100px;
+      left: -100px;
+    }
+
+    .blob-2 {
+      width: 600px;
+      height: 600px;
+      background: rgba(230, 220, 255, 0.5);
+      bottom: -150px;
+      right: -100px;
+      animation-delay: -10s;
+    }
+
+    @keyframes float {
+      0% { transform: translate(0, 0) scale(1); }
+      100% { transform: translate(60px, 40px) scale(1.1); }
+    }
+
+    /* アプリ全体系レイアウト */
+    .app-header {
+      position: relative;
+      z-index: 10;
+      padding: 20px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .app-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .app-title-badge {
+      font-size: 0.75rem;
+      font-weight: 500;
+      background: rgba(255, 255, 255, 0.6);
+      padding: 4px 10px;
+      border-radius: 20px;
+      border: 1px solid var(--glass-border);
+      color: var(--text-muted);
+    }
+
+    .main-workspace {
+      position: relative;
+      z-index: 10;
+      flex: 1;
+      display: flex;
+      gap: 24px;
+      padding: 0 32px 24px 32px;
+      overflow: hidden;
+    }
+
+    /* リキッドグラス・パネル基本 */
+    .glass-panel {
+      background: var(--glass-bg);
+      backdrop-filter: blur(30px) saturate(180%);
+      -webkit-backdrop-filter: blur(30px) saturate(180%);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-xl);
+      box-shadow: var(--glass-shadow);
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* キャンバス表示エリア */
+    .stage-container {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: rgba(255, 255, 255, 0.25);
+    }
+
+    .canvas-wrapper {
+      position: relative;
+      max-width: 100%;
+      max-height: 100%;
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.8);
+      background: #000;
+    }
+
+    canvas {
+      display: block;
+      max-width: 100%;
+      max-height: 72vh;
+      object-fit: contain;
+    }
+
+    /* サイドバー・コントロール */
+    .sidebar {
+      width: 340px;
+      padding: 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      overflow-y: auto;
+    }
+
+    .sidebar::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .sidebar::-webkit-scrollbar-thumb {
+      background: rgba(0, 0, 0, 0.1);
+      border-radius: 10px;
+    }
+
+    .section-title {
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+    }
+
+    .glass-card {
+      background: var(--glass-bg-subtle);
+      border: 1px solid rgba(255, 255, 255, 0.6);
+      border-radius: var(--radius-lg);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    /* iOSスタイルのカスタムファイル入力ボタン */
+    .file-input-wrapper {
+      position: relative;
+    }
+
+    input[type="file"] {
+      display: none;
+    }
+
+    .file-btn {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      background: rgba(255, 255, 255, 0.7);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-md);
+      color: var(--text-main);
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+    }
+
+    .file-btn:hover {
+      background: rgba(255, 255, 255, 0.95);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    }
+
+    .file-name {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 4px;
+      padding: 0 4px;
+    }
+
+    /* スライダー（iOSデザイン） */
+    .control-item {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .control-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.85rem;
+      font-weight: 500;
+    }
+
+    .slider-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 6px;
+      background: rgba(0, 0, 0, 0.08);
+      border-radius: 3px;
+      outline: none;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #ffffff;
+      border: 0.5px solid rgba(0,0,0,0.04);
+      box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15), 0 0 1px rgba(0,0,0,0.2);
+      cursor: pointer;
+      transition: transform 0.1s ease;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:active {
+      transform: scale(1.15);
+    }
+
+    /* プリセットグリッド */
+    .preset-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+
+    .btn-glass {
+      padding: 10px;
+      background: rgba(255, 255, 255, 0.5);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-md);
+      color: var(--text-main);
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .btn-glass:hover {
+      background: rgba(255, 255, 255, 0.85);
+      transform: translateY(-1px);
+    }
+
+    .btn-glass:active {
+      transform: scale(0.97);
+    }
+
+    /* ボトムプレイヤーコントロールバー */
+    .player-bar {
+      position: relative;
+      z-index: 10;
+      margin: 0 32px 24px 32px;
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .btn-play {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: var(--accent-color);
+      border: none;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(0, 113, 227, 0.35);
+      transition: all 0.2s ease;
+      flex-shrink: 0;
+    }
+
+    .btn-play:hover {
+      transform: scale(1.05);
+      background: #0077ed;
+    }
+
+    .btn-play:active {
+      transform: scale(0.95);
+    }
+
+    .btn-play svg {
+      width: 18px;
+      height: 18px;
+      fill: currentColor;
+    }
+
+    .time-display {
+      font-size: 0.85rem;
+      font-weight: 500;
+      font-variant-numeric: tabular-nums;
+      color: var(--text-muted);
+      min-width: 100px;
+    }
+
+    video {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="bg-blob blob-1"></div>
+  <div class="bg-blob blob-2"></div>
+
+  <header class="app-header">
+    <div class="app-title">
+      Liquid PiP Studio
+      <span class="app-title-badge">iOS Glass Style</span>
+    </div>
+  </header>
+
+  <main class="main-workspace">
+    <div class="glass-panel stage-container">
+      <div class="canvas-wrapper">
+        <canvas id="stage" width="1280" height="720"></canvas>
+      </div>
+    </div>
+
+    <aside class="glass-panel sidebar">
+      <div>
+        <div class="section-title">Video Input</div>
+        <div class="glass-card">
+          <div class="control-item">
+            <div class="control-header"><span>メイン動画 (背景)</span></div>
+            <div class="file-input-wrapper">
+              <label for="mainVideoInput" class="file-btn">
+                <span>ファイルを選択</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              </label>
+              <input type="file" id="mainVideoInput" accept="video/*">
+              <div id="mainFileName" class="file-name">未選択</div>
+            </div>
+          </div>
+
+          <div class="control-item">
+            <div class="control-header"><span>サブ動画 (PiP)</span></div>
+            <div class="file-input-wrapper">
+              <label for="pipVideoInput" class="file-btn">
+                <span>ファイルを選択</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              </label>
+              <input type="file" id="pipVideoInput" accept="video/*">
+              <div id="pipFileName" class="file-name">未選択</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="section-title">PiP Layout</div>
+        <div class="glass-card">
+          <div class="control-item">
+            <div class="control-header">
+              <span>サイズスケール</span>
+              <span id="scaleVal" style="color: var(--text-muted);">25%</span>
+            </div>
+            <div class="slider-wrapper">
+              <input type="range" id="pipScale" min="0.1" max="0.5" step="0.01" value="0.25">
+            </div>
+          </div>
+
+          <div class="control-item">
+            <div class="control-header"><span>配置プリセット</span></div>
+            <div class="preset-grid">
+              <button class="btn-glass" onclick="setPipPosition('top-left')">左上</button>
+              <button class="btn-glass" onclick="setPipPosition('top-right')">右上</button>
+              <button class="btn-glass" onclick="setPipPosition('bottom-left')">左下</button>
+              <button class="btn-glass" onclick="setPipPosition('bottom-right')">右下</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="section-title">Audio Mixer</div>
+        <div class="glass-card">
+          <div class="control-item">
+            <div class="control-header"><span>メイン音量</span></div>
+            <input type="range" id="mainVolume" min="0" max="1" step="0.05" value="1">
+          </div>
+          <div class="control-item">
+            <div class="control-header"><span>PiP音量</span></div>
+            <input type="range" id="pipVolume" min="0" max="1" step="0.05" value="1">
+          </div>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <footer class="glass-panel player-bar">
+    <button id="playBtn" class="btn-play" aria-label="Play">
+      <svg id="playIcon" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+      <svg id="pauseIcon" viewBox="0 0 24 24" style="display: none;"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+    </button>
+    <div style="flex: 1; display: flex; align-items: center; gap: 16px;">
+      <input type="range" id="seekBar" min="0" max="100" value="0" step="0.1">
+      <span id="timeDisplay" class="time-display">00:00 / 00:00</span>
+    </div>
+  </footer>
+
+  <video id="mainVideo" playsinline></video>
+  <video id="pipVideo" playsinline></video>
+
+  <script>
+    const canvas = document.getElementById('stage');
+    const ctx = canvas.getContext('2d');
+
+    const mainVideo = document.getElementById('mainVideo');
+    const pipVideo = document.getElementById('pipVideo');
+
+    const mainVideoInput = document.getElementById('mainVideoInput');
+    const pipVideoInput = document.getElementById('pipVideoInput');
+    const mainFileName = document.getElementById('mainFileName');
+    const pipFileName = document.getElementById('pipFileName');
+
+    const playBtn = document.getElementById('playBtn');
+    const playIcon = document.getElementById('playIcon');
+    const pauseIcon = document.getElementById('pauseIcon');
+    const seekBar = document.getElementById('seekBar');
+    const timeDisplay = document.getElementById('timeDisplay');
+    const pipScaleInput = document.getElementById('pipScale');
+    const scaleVal = document.getElementById('scaleVal');
+    const mainVolumeInput = document.getElementById('mainVolume');
+    const pipVolumeInput = document.getElementById('pipVolume');
+
+    let pipState = {
+      x: 930,
+      y: 510,
+      width: 320,
+      height: 180,
+      scale: 0.25,
+      isDragging: false,
+      dragOffsetX: 0,
+      dragOffsetY: 0
+    };
+
+    mainVideoInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        mainFileName.textContent = file.name;
+        mainVideo.src = URL.createObjectURL(file);
+        mainVideo.load();
+      }
+    });
+
+    pipVideoInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        pipFileName.textContent = file.name;
+        pipVideo.src = URL.createObjectURL(file);
+        pipVideo.load();
+      }
+    });
+
+    mainVideo.addEventListener('loadedmetadata', () => {
+      canvas.width = mainVideo.videoWidth || 1280;
+      canvas.height = mainVideo.videoHeight || 720;
+      updatePipDimensions();
+      setPipPosition('bottom-right');
+      updateTimeDisplay();
+    });
+
+    pipVideo.addEventListener('loadedmetadata', () => {
+      updatePipDimensions();
+      setPipPosition('bottom-right');
+    });
+
+    function updatePipDimensions() {
+      const scale = parseFloat(pipScaleInput.value);
+      pipState.scale = scale;
+      scaleVal.textContent = Math.round(scale * 100) + '%';
+
+      if (pipVideo.videoWidth && pipVideo.videoHeight) {
+        const aspect = pipVideo.videoWidth / pipVideo.videoHeight;
+        pipState.width = canvas.width * scale;
+        pipState.height = pipState.width / aspect;
+      } else {
+        pipState.width = canvas.width * scale;
+        pipState.height = canvas.height * scale;
+      }
+    }
+
+    function setPipPosition(preset) {
+      const margin = 24;
+      switch (preset) {
+        case 'top-left':
+          pipState.x = margin;
+          pipState.y = margin;
+          break;
+        case 'top-right':
+          pipState.x = canvas.width - pipState.width - margin;
+          pipState.y = margin;
+          break;
+        case 'bottom-left':
+          pipState.x = margin;
+          pipState.y = canvas.height - pipState.height - margin;
+          break;
+        case 'bottom-right':
+          pipState.x = canvas.width - pipState.width - margin;
+          pipState.y = canvas.height - pipState.height - margin;
+          break;
+      }
+    }
+
+    pipScaleInput.addEventListener('input', () => {
+      updatePipDimensions();
+    });
+
+    playBtn.addEventListener('click', () => {
+      if (mainVideo.paused) {
+        mainVideo.play();
+        pipVideo.play();
+        playIcon.style.display = 'none';
+        pauseIcon.style.display = 'block';
+      } else {
+        mainVideo.pause();
+        pipVideo.pause();
+        playIcon.style.display = 'block';
+        pauseIcon.style.display = 'none';
+      }
+    });
+
+    mainVideo.addEventListener('timeupdate', () => {
+      if (!seekBar.classList.contains('user-touching')) {
+        const progress = (mainVideo.currentTime / mainVideo.duration) * 100;
+        seekBar.value = isNaN(progress) ? 0 : progress;
+      }
+      updateTimeDisplay();
+    });
+
+    seekBar.addEventListener('input', () => {
+      seekBar.classList.add('user-touching');
+      const time = (seekBar.value / 100) * mainVideo.duration;
+      mainVideo.currentTime = time;
+      if (pipVideo.duration) {
+        pipVideo.currentTime = time % pipVideo.duration;
+      }
+    });
+
+    seekBar.addEventListener('change', () => {
+      seekBar.classList.remove('user-touching');
+    });
+
+    mainVolumeInput.addEventListener('input', (e) => {
+      mainVideo.volume = e.target.value;
+    });
+
+    pipVolumeInput.addEventListener('input', (e) => {
+      pipVideo.volume = e.target.value;
+    });
+
+    function formatTime(seconds) {
+      if (isNaN(seconds)) return "00:00";
+      const m = Math.floor(seconds / 60);
+      const s = Math.floor(seconds % 60);
+      return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    }
+
+    function updateTimeDisplay() {
+      const current = formatTime(mainVideo.currentTime);
+      const total = formatTime(mainVideo.duration);
+      timeDisplay.textContent = `${current} / ${total}`;
+    }
+
+    function render() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      if (mainVideo.readyState >= 2) {
+        ctx.drawImage(mainVideo, 0, 0, canvas.width, canvas.height);
+      } else {
+        ctx.fillStyle = '#f0f3f8';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#86868b';
+        ctx.font = '500 20px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('メイン動画を選択してください', canvas.width / 2, canvas.height / 2);
+      }
+
+      if (pipVideo.readyState >= 2) {
+        // PiP描画（角丸・シャドウ適用）
+        ctx.save();
+        const radius = 16;
+        const x = pipState.x;
+        const y = pipState.y;
+        const w = pipState.width;
+        const h = pipState.height;
+
+        ctx.beginPath();
+        ctx.moveTo(x + radius, y);
+        ctx.arcTo(x + w, y, x + w, y + h, radius);
+        ctx.arcTo(x + w, y + h, x, y + h, radius);
+        ctx.arcTo(x, y + h, x, y, radius);
+        ctx.arcTo(x, y, x + w, y, radius);
+        ctx.closePath();
+
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.2)';
+        ctx.shadowBlur = 20;
+        ctx.shadowOffsetY = 8;
+
+        ctx.clip();
+        ctx.drawImage(pipVideo, x, y, w, h);
+
+        // リキッドグラス調の白い境界線
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      requestAnimationFrame(render);
+    }
+    requestAnimationFrame(render);
+
+    function getCanvasCoordinates(e) {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      return {
+        x: (e.clientX - rect.left) * scaleX,
+        y: (e.clientY - rect.top) * scaleY
+      };
+    }
+
+    canvas.addEventListener('mousedown', (e) => {
+      const coords = getCanvasCoordinates(e);
+      if (
+        coords.x >= pipState.x &&
+        coords.x <= pipState.x + pipState.width &&
+        coords.y >= pipState.y &&
+        coords.y <= pipState.y + pipState.height
+      ) {
+        pipState.isDragging = true;
+        pipState.dragOffsetX = coords.x - pipState.x;
+        pipState.dragOffsetY = coords.y - pipState.y;
+      }
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (pipState.isDragging) {
+        const coords = getCanvasCoordinates(e);
+        pipState.x = coords.x - pipState.dragOffsetX;
+        pipState.y = coords.y - pipState.dragOffsetY;
+      }
+    });
+
+    window.addEventListener('mouseup', () => {
+      pipState.isDragging = false;
+    });
+  </script>
+</body>
+</html>
